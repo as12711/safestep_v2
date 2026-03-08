@@ -1,0 +1,56 @@
+# SafeStep Git Attributes
+# Normalize line endings across all platforms
+
+# Default: Auto-detect text files and normalize to LF on commit
+* text=auto eol=lf
+
+# JavaScript / TypeScript
+*.js text eol=lf
+*.jsx text eol=lf
+*.ts text eol=lf
+*.tsx text eol=lf
+*.mjs text eol=lf
+*.cjs text eol=lf
+
+# JSON / Config
+*.json text eol=lf
+*.yaml text eol=lf
+*.yml text eol=lf
+
+# Python
+*.py text eol=lf
+
+# HTML / CSS
+*.html text eol=lf
+*.css text eol=lf
+*.scss text eol=lf
+
+# Markdown / Text
+*.md text eol=lf
+*.txt text eol=lf
+
+# Shell scripts (always LF, even on Windows)
+*.sh text eol=lf
+*.bash text eol=lf
+
+# Windows batch files (keep CRLF)
+*.bat text eol=crlf
+*.cmd text eol=crlf
+*.ps1 text eol=crlf
+
+# Binary files (don't touch)
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.webp binary
+*.ttf binary
+*.woff binary
+*.woff2 binary
+*.eot binary
+*.otf binary
+*.zip binary
+*.gz binary
+*.tar binary
+

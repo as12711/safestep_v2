@@ -1,0 +1,18 @@
+{
+  "compilerOptions": {
+    "baseUrl": ".",
+    "paths": {
+      "@/*": ["src/*"],
+      "@components/*": ["src/components/*"],
+      "@services/*": ["src/services/*"],
+      "@config/*": ["src/config/*"],
+      "@utils/*": ["src/utils/*"],
+      "@data/*": ["src/data/*"]
+    },
+    "jsx": "react-native",
+    "module": "ES6",
+    "moduleResolution": "node",
+    "target": "ES6"
+  },
+  "exclude": ["node_modules"]
+}

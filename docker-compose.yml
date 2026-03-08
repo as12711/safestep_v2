@@ -1,0 +1,34 @@
+# SafeStep Services
+# Docker Compose configuration for local development and deployment
+
+services:
+  # Python routing backend
+  routing-api:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: safestep-routing
+    ports:
+      - "8000:8000"
+    environment:
+      - PYTHONUNBUFFERED=1
+      - LOG_LEVEL=INFO
+      # Add your environment variables here:
+      # - SUPABASE_URL=${SUPABASE_URL}
+      # - SUPABASE_KEY=${SUPABASE_KEY}
+    volumes:
+      # Mount cache directory for persistent graph storage
+      - routing-cache:/app/cache
+      # Development: mount source for hot reload (uncomment if needed)
+      # - ./backend/routing:/app/routing:ro
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    restart: unless-stopped
+
+volumes:
+  routing-cache:
+    driver: local

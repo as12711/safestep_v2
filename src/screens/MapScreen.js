@@ -85,192 +85,6 @@ const DARK_MAP_STYLE = [
 const ORIGIN = { latitude: 40.7294, longitude: -73.9905 };
 const DESTINATION = { latitude: 40.7308, longitude: -73.9973 };
 
-// Demo routes: Astor Place → Washington Square Park
-// Every waypoint is placed at a real NYC street intersection so the polyline
-// never cuts through buildings. Streets verified against the Manhattan grid.
-const DEMO_ROUTES = [
-  {
-    id: 'route-1',
-    safetyScore: 87,
-    duration: 12,
-    distance: 0.6,
-    viaStreets: ['Broadway', 'MacDougal St'],
-    hasLighting: true,
-    crowdLevel: 'busy',
-    isAccessible: true,
-    mapVisible: true,
-    alerts: [],
-    instructions: [
-      { text: 'Head west on Astor Place',        dir: 'straight' },
-      { text: 'Bear left onto Broadway',         dir: 'left'     },
-      { text: 'Continue southwest on Broadway',  dir: 'straight' },
-      { text: 'Turn right on W 4th St',          dir: 'right'    },
-      { text: 'Continue west on W 4th',          dir: 'straight' },
-      { text: 'Enter Washington Square Park',    dir: 'straight' },
-      { text: "You've arrived!",                 dir: 'arrive'   },
-    ],
-    // Astor Pl & 4th Ave → Astor Pl & Broadway → SW on Broadway → Broadway & W 4th →
-    // W on W 4th → MacDougal curves NW into WSP
-    coordinates: [
-      { latitude: 40.7294, longitude: -73.9905 }, // Astor Pl & 4th Ave
-      { latitude: 40.7297, longitude: -73.9912 }, // Astor Pl & Broadway
-      { latitude: 40.7291, longitude: -73.9928 }, // SW on Broadway
-      { latitude: 40.7285, longitude: -73.9944 }, // Broadway & W 4th St
-      { latitude: 40.7285, longitude: -73.9957 }, // W 4th heading W
-      { latitude: 40.7295, longitude: -73.9966 }, // MacDougal heading N (W 4th curves NW here)
-      { latitude: 40.7308, longitude: -73.9973 }, // WSP arch
-    ],
-  },
-  {
-    id: 'route-2',
-    safetyScore: 72,
-    duration: 10,
-    distance: 0.5,
-    viaStreets: ['Bleecker St', 'Thompson St'],
-    hasLighting: true,
-    crowdLevel: 'moderate',
-    isAccessible: true,
-    mapVisible: true,
-    alerts: [{ icon: '🚧', tag: 'construction', message: 'Construction on Bleecker' }],
-    instructions: [
-      { text: 'Head south on Lafayette St',      dir: 'straight' },
-      { text: 'Continue south on Lafayette',     dir: 'straight' },
-      { text: 'Turn right on Bleecker St',       dir: 'right'    },
-      { text: 'Continue west on Bleecker',       dir: 'straight' },
-      { text: 'Caution: construction zone',      dir: 'straight' },
-      { text: 'Turn right on Thompson St',       dir: 'right'    },
-      { text: 'Head north on Thompson St',       dir: 'straight' },
-      { text: 'Continue north on Thompson',      dir: 'straight' },
-      { text: 'Enter Washington Square Park',    dir: 'straight' },
-      { text: "You've arrived!",                 dir: 'arrive'   },
-    ],
-    // S on Lafayette → W on Bleecker (has construction) → N on Thompson → WSP south
-    coordinates: [
-      { latitude: 40.7294, longitude: -73.9905 }, // Astor Pl & Lafayette
-      { latitude: 40.7280, longitude: -73.9901 }, // S on Lafayette
-      { latitude: 40.7265, longitude: -73.9901 }, // Lafayette & Bleecker
-      { latitude: 40.7261, longitude: -73.9921 }, // W on Bleecker
-      { latitude: 40.7257, longitude: -73.9946 }, // Bleecker continuing W
-      { latitude: 40.7254, longitude: -73.9968 }, // Bleecker & Thompson
-      { latitude: 40.7265, longitude: -73.9971 }, // N on Thompson
-      { latitude: 40.7280, longitude: -73.9975 }, // Thompson heading N
-      { latitude: 40.7294, longitude: -73.9977 }, // Thompson near WSP south gate
-      { latitude: 40.7308, longitude: -73.9973 }, // WSP arch
-    ],
-  },
-  {
-    id: 'route-3',
-    safetyScore: 58,
-    duration: 8,
-    distance: 0.4,
-    viaStreets: ['Mercer St', 'W 4th St'],
-    hasLighting: false,
-    crowdLevel: 'quiet',
-    isAccessible: false,
-    mapVisible: false,
-    alerts: [
-      { icon: '🌑', message: 'Poor lighting ahead' },
-      { icon: '🤫', message: 'Low foot traffic' },
-    ],
-    instructions: [
-      { text: 'Head west on Astor Place',        dir: 'straight' },
-      { text: 'Continue west toward Mercer',     dir: 'straight' },
-      { text: 'Turn left on Mercer St',          dir: 'left'     },
-      { text: 'Head south on Mercer St',         dir: 'straight' },
-      { text: 'Turn right on W 4th St',          dir: 'right'    },
-      { text: 'Continue west on W 4th',          dir: 'straight' },
-      { text: 'Bear right toward WSP',           dir: 'right'    },
-      { text: 'Enter Washington Square Park',    dir: 'straight' },
-      { text: "You've arrived!",                 dir: 'arrive'   },
-    ],
-    // W on Astor Pl/E 8th → S on Mercer → W on W 4th → WSP east entrance
-    coordinates: [
-      { latitude: 40.7294, longitude: -73.9905 }, // Astor Pl & 4th Ave
-      { latitude: 40.7291, longitude: -73.9920 }, // W on Astor Pl toward Mercer
-      { latitude: 40.7291, longitude: -73.9933 }, // E 8th & Mercer
-      { latitude: 40.7280, longitude: -73.9933 }, // S on Mercer
-      { latitude: 40.7270, longitude: -73.9933 }, // Mercer & W 4th area
-      { latitude: 40.7268, longitude: -73.9948 }, // W on W 4th (Mercer meets W 4th)
-      { latitude: 40.7268, longitude: -73.9962 }, // W 4th heading W
-      { latitude: 40.7290, longitude: -73.9970 }, // W 4th curves NW toward WSP
-      { latitude: 40.7308, longitude: -73.9973 }, // WSP arch
-    ],
-  },
-  {
-    id: 'route-4',
-    safetyScore: 65,
-    duration: 11,
-    distance: 0.55,
-    viaStreets: ['W 3rd St', 'LaGuardia Pl'],
-    hasLighting: true,
-    crowdLevel: 'quiet',
-    isAccessible: false,
-    mapVisible: false,
-    alerts: [
-      { icon: '🤫', message: 'Low foot traffic at night' },
-    ],
-    instructions: [
-      { text: 'Head south on Lafayette St',      dir: 'straight' },
-      { text: 'Continue south on Lafayette',     dir: 'straight' },
-      { text: 'Turn right on W 3rd St',          dir: 'right'    },
-      { text: 'Continue west on W 3rd',          dir: 'straight' },
-      { text: 'Continue west on W 3rd',          dir: 'straight' },
-      { text: 'Turn right on LaGuardia Pl',      dir: 'right'    },
-      { text: 'Head north on LaGuardia Pl',      dir: 'straight' },
-      { text: 'Continue north on LaGuardia',     dir: 'straight' },
-      { text: 'Enter Washington Square Park',    dir: 'straight' },
-      { text: "You've arrived!",                 dir: 'arrive'   },
-    ],
-    // S on Lafayette → W on W 3rd St → N on LaGuardia → WSP south gate
-    coordinates: [
-      { latitude: 40.7294, longitude: -73.9905 }, // Astor Pl & Lafayette
-      { latitude: 40.7275, longitude: -73.9901 }, // S on Lafayette
-      { latitude: 40.7260, longitude: -73.9901 }, // Lafayette near W 3rd
-      { latitude: 40.7254, longitude: -73.9920 }, // W on W 3rd St
-      { latitude: 40.7252, longitude: -73.9944 }, // W 3rd continuing
-      { latitude: 40.7251, longitude: -73.9964 }, // W 3rd & LaGuardia Pl
-      { latitude: 40.7262, longitude: -73.9981 }, // N on LaGuardia
-      { latitude: 40.7278, longitude: -73.9983 }, // LaGuardia heading N
-      { latitude: 40.7294, longitude: -73.9980 }, // LaGuardia near WSP south
-      { latitude: 40.7308, longitude: -73.9973 }, // WSP arch
-    ],
-  },
-  {
-    id: 'route-5',
-    safetyScore: 79,
-    duration: 14,
-    distance: 0.7,
-    viaStreets: ['E 9th St', 'University Pl'],
-    hasLighting: true,
-    crowdLevel: 'busy',
-    isAccessible: true,
-    mapVisible: false,
-    alerts: [],
-    instructions: [
-      { text: 'Head north on 4th Ave',           dir: 'straight' },
-      { text: 'Continue north on 4th Ave',       dir: 'straight' },
-      { text: 'Turn left on E 9th St',           dir: 'left'     },
-      { text: 'Continue west on E 9th',          dir: 'straight' },
-      { text: 'Turn left on University Pl',      dir: 'left'     },
-      { text: 'Head south on University Pl',     dir: 'straight' },
-      { text: 'Continue toward WSP east gate',   dir: 'straight' },
-      { text: 'Enter Washington Square Park',    dir: 'straight' },
-      { text: "You've arrived!",                 dir: 'arrive'   },
-    ],
-    // N on 4th Ave → W on E 9th St → S on University Pl → WSP east entrance
-    coordinates: [
-      { latitude: 40.7294, longitude: -73.9905 }, // Astor Pl & 4th Ave
-      { latitude: 40.7305, longitude: -73.9905 }, // N on 4th Ave
-      { latitude: 40.7315, longitude: -73.9907 }, // 4th Ave & E 9th St
-      { latitude: 40.7315, longitude: -73.9920 }, // W on E 9th
-      { latitude: 40.7315, longitude: -73.9937 }, // E 9th & University Pl
-      { latitude: 40.7308, longitude: -73.9941 }, // S on University Pl
-      { latitude: 40.7308, longitude: -73.9952 }, // University Pl at WSP east
-      { latitude: 40.7308, longitude: -73.9963 }, // WSP east path
-      { latitude: 40.7308, longitude: -73.9973 }, // WSP arch
-    ],
-  },
-];
 
 // Backend API
 const API_BASE = ENV.ROUTING_API_URL || 'http://localhost:8000';
@@ -278,46 +92,41 @@ const API_BASE = ENV.ROUTING_API_URL || 'http://localhost:8000';
 async function fetchRoutes(originCoords, destCoords) {
   try {
     console.log('[MapScreen] Fetching routes from:', API_BASE);
-    const res = await fetch(`${API_BASE}/route`, {
+    // Canonical routing path: the frontend-shaped /route/app endpoint. It
+    // returns routes already in the shape the UI consumes (coordinates as
+    // {latitude, longitude}, distance in miles, safetyScore 0-100), so no
+    // client-side re-scoring or coordinate juggling is needed.
+    const res = await fetch(`${API_BASE}/route/app`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        origin: originCoords,    // [lat, lng] format for router.py
-        destination: destCoords, // [lat, lng] format for router.py
-        filters: [],             // offense-type filter — empty = all crimes weighted
+        origin: { lat: originCoords[0], lng: originCoords[1] },
+        destination: { lat: destCoords[0], lng: destCoords[1] },
+        alternatives: true,
       }),
     });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const data = await res.json();
-    console.log('[MapScreen] Routes fetched successfully:', data);
+    console.log('[MapScreen] Routes fetched:', data.routes?.length ?? 0);
 
-    // Backend now returns {routes: [...], primary: {...}}
-    const apiRoutes = (data.routes || [data]).map((routeData, idx) => {
-      const coords = routeData.route.coordinates.map(([lon, lat]) => ({ latitude: lat, longitude: lon }));
-      const safetyPct = Math.round(routeData.safety_score * 100);
-      return {
-        id: routeData.id || `route_${idx}`,
-        name: routeData.name || 'Route',
-        safetyScore: safetyPct,
-        distance: routeData.distance_m * 0.000621371, // metres → miles
-        duration: Math.max(1, Math.round(routeData.duration_min)),
-        viaStreets: ['Astor Place', 'Waverly Place'],
-        crowdLevel: routeData.safety_score >= 0.7 ? 'busy' : 'moderate',
-        hasLighting: routeData.safety_score >= 0.7,
-        isAccessible: true,
-        alerts: routeData.markers.length > 10
-          ? [{ type: 'warning', message: `${routeData.markers.length} incidents nearby` }]
-          : [],
-        coordinates: coords,
-      };
-    });
-    
-    console.log('[MapScreen] API Routes created:', apiRoutes.length);
-    // Use all crime markers from the primary/safest route
-    const primaryData = data.primary || data.routes?.[0] || data;
-    return { routes: apiRoutes, crimeMarkers: primaryData.markers };
+    const apiRoutes = (data.routes || []).map((r, idx) => ({
+      id: r.id || `route_${idx}`,
+      name: r.name || 'Route',
+      safetyScore: r.safetyScore,
+      distance: r.distance,          // miles (RouteCard formats)
+      duration: r.duration,          // minutes
+      viaStreets: r.viaStreets || [],
+      crowdLevel: r.crowdLevel || 'moderate',
+      hasLighting: r.hasLighting,
+      isAccessible: r.isAccessible,
+      alerts: r.alerts || [],
+      coordinates: r.coordinates,    // already [{latitude, longitude}]
+    }));
+
+    if (apiRoutes.length === 0) return null;
+    return { routes: apiRoutes };
   } catch (err) {
-    console.warn('[SafeStep] API unavailable, using demo routes:', err.message);
+    console.warn('[SafeStep] Routing API unavailable:', err.message);
     return null;
   }
 }
@@ -393,8 +202,9 @@ const MapScreen = memo(({
   const [searchValue, setSearchValue] = useState('Washington Square Park');
   const [isNavigating, setIsNavigating] = useState(false);
   const [showRoutes, setShowRoutes] = useState(true);
-  const [routes, setRoutes] = useState(DEMO_ROUTES);
-  const [selectedRoute, setSelectedRoute] = useState(DEMO_ROUTES[0]);
+  const [routes, setRoutes] = useState([]);
+  const [selectedRoute, setSelectedRoute] = useState(null);
+  const [routingStatus, setRoutingStatus] = useState('loading'); // 'loading' | 'ready' | 'offline'
   const [currentSafetyScore, setCurrentSafetyScore] = useState(78);
   const [showFilters, setShowFilters] = useState(false);
   const [sheetCollapsed, setSheetCollapsed] = useState(false);
@@ -411,20 +221,33 @@ const MapScreen = memo(({
   // Keep a snapshot of the completed route for the review screen (selectedRoute may be null by then)
   const completedRouteRef           = useRef(null);
 
-  // Fetch real routes from backend on mount; fall back to DEMO_ROUTES if unavailable
-  useEffect(() => {
+  // Fetch real routes from the backend. If the routing service is unreachable
+  // we surface an explicit offline state — we never fall back to fabricated
+  // routes, since presenting demo data as a real safety-informed route would
+  // misrepresent the product.
+  const loadRoutes = useCallback(() => {
+    setRoutingStatus('loading');
     fetchRoutes(
       [ORIGIN.latitude, ORIGIN.longitude],
       [DESTINATION.latitude, DESTINATION.longitude],
     ).then(result => {
       if (result) {
-        // Use all routes from API (Safest, Balanced, Fastest)
+        // Use all routes from API (Safest, Balanced, Fastest, alternatives).
+        // /route/app returns no raw incident markers by design (agent-context
+        // §2.2: no crime overlays / area "danger" labels). Risk is expressed
+        // only through route ranking and per-segment shading.
         setRoutes(result.routes);
         setSelectedRoute(result.routes[0]);
-        setCrimeMarkers(result.crimeMarkers);
+        setRoutingStatus('ready');
+      } else {
+        setRoutes([]);
+        setSelectedRoute(null);
+        setRoutingStatus('offline');
       }
     });
   }, []);
+
+  useEffect(() => { loadRoutes(); }, [loadRoutes]);
 
   // AND semantics for strict filters: all active non-preference filters must pass.
   // Preference filters only re-rank matching routes; they do not exclude routes.
@@ -875,11 +698,14 @@ const MapScreen = memo(({
 
           {!sheetCollapsed && (
             <>
-              <View style={styles.alertBanner}>
-                <Text style={styles.alertBannerText}>
-                  🔔 8 reports near WSP tonight — safest route highlighted
-                </Text>
-              </View>
+              {/* TODO(P1-4 copy audit): this report count is placeholder copy. */}
+              {routingStatus === 'ready' && (
+                <View style={styles.alertBanner}>
+                  <Text style={styles.alertBannerText}>
+                    🔔 8 reports near WSP tonight — safest route highlighted
+                  </Text>
+                </View>
+              )}
 
               <View style={styles.routeSheetHeader}>
                 <View style={styles.routeSheetTitle}>
@@ -900,7 +726,25 @@ const MapScreen = memo(({
                 </View>
               </View>
 
-              {filteredRoutes.length === 0 ? (
+              {routingStatus === 'offline' ? (
+                <View style={styles.emptyState}>
+                  <Text style={styles.emptyStateIcon}>⚠️</Text>
+                  <Text style={styles.emptyStateTitle}>Routing unavailable</Text>
+                  <Text style={styles.emptyStateText}>We couldn't reach the routing service. Check your connection and try again.</Text>
+                  <TouchableOpacity
+                    style={styles.emptyStateReset}
+                    onPress={loadRoutes}
+                  >
+                    <Text style={styles.emptyStateResetText}>Retry</Text>
+                  </TouchableOpacity>
+                </View>
+              ) : routingStatus === 'loading' ? (
+                <View style={styles.emptyState}>
+                  <Text style={styles.emptyStateIcon}>🧭</Text>
+                  <Text style={styles.emptyStateTitle}>Finding routes…</Text>
+                  <Text style={styles.emptyStateText}>Loading safety-informed route suggestions.</Text>
+                </View>
+              ) : filteredRoutes.length === 0 ? (
                 <View style={styles.emptyState}>
                   <Text style={styles.emptyStateIcon}>🕵️</Text>
                   <Text style={styles.emptyStateTitle}>Too safe for these streets?</Text>

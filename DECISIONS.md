@@ -1,0 +1,48 @@
+# SafeStep v2 — Design Decision Log
+
+Dated record of non-trivial algorithmic and architectural decisions. The pilot is documented as research evidence; entries must be dated and must not be rewritten retroactively. Newest entries at the top.
+
+Format per entry: date, decision, rationale, alternatives rejected.
+
+---
+
+## 2026-07-05 — Canonical working copy is `~/safestep_v2`
+- **Decision:** Develop in `~/safestep_v2`; `~/Desktop/safestep_v2` is retired to remove a duplicate source of truth. Both clones were on the same commit (`48d3d84`) matching `origin/main`.
+- **Rationale:** Two live clones invite divergence. The home clone was clean; the Desktop clone's only unique work was one uncommitted line (the NYC dataset swap below), now folded in.
+- **Alternatives rejected:** Keep both (drift risk); develop on Desktop (arbitrary, and it carried stray untracked state).
+
+## 2026-07-06 — Backend test suite + CI (P1-3, subagent-driven)
+- **Decision:** Added `backend/tests/` (pytest): 50 unit tests for the deterministic scoring/validation logic (`_calculate_cell_crime_score` decay tiers + clamp boundaries, `_get_cell_key`, `_haversine`, `_require_schema`, `_nyc_headers`, `config.Settings` parsing + `validate()` branches) plus a guarded API smoke module that self-skips without osmnx. Added `backend/pytest.ini`, `.github/workflows/ci.yml` (gating `unit` job on light deps; best-effort `full` job with install-only `continue-on-error` + job timeouts + de-duplicated triggers), and a root `package.json` `test` script.
+- **Process:** Executed via subagent-driven development — implementer → spec-compliance review (independently ran the suite, ✅) → code-quality review (Approved, no Critical/Important) → applied the reviewer's CI-signal fixes. Commits `7cf851a` (suite) + `d5c6091` (CI hardening) on `pilot/p0-hardening`.
+- **Rationale:** osmnx/geopandas/GDAL are too heavy to install locally, so the unit suite is runnable with only pytest/pytest-asyncio/aiohttp; API/integration tests are written but guarded to run in CI where full deps exist. Tests-for-the-math is an agent-context §6 mandate.
+- **Alternatives rejected:** Adding a JS test framework (out of scope for the pilot); making the geospatial CI job gating (flaky GDAL install would block PRs).
+
+## 2026-07-05 — NYC Open Data app token + fail-loud ingest validation (P0-4)
+- **Decision:** Socrata requests now send an `X-App-Token` header when `NYC_OPEN_DATA_APP_TOKEN` is set. Added `_require_schema()`: after each fetch, if rows are returned but the first row lacks the fields the ingest depends on (`REQUIRED_911_FIELDS`, `REQUIRED_COMPLAINT_FIELDS`), it raises loudly. Schema validation runs *outside* the network try/except so drift is not swallowed as a transient fetch error. Added `backend/.env.example` documenting all backend env vars.
+- **Rationale:** Anonymous Socrata requests share a low throttling pool. Silent schema drift (a renamed field) previously produced empty results and quietly dropped the crime signal; failing loudly surfaces it (agent-context §6: validate on ingest, fail loudly, never coerce silently). Required-field sets were taken from the fields the code already reads, and verified present against the live `n2zq-pubd` and `5uac-w243` datasets so healthy responses never false-trigger.
+- **Alternatives rejected:** `$$app_token` query param (header is cleaner, not logged in URLs); strict per-row validation (would reject partial rows the loop already tolerates).
+
+## 2026-07-05 — Durable risk via re-derivation + self-init + scheduled refresh (P0-3)
+- **Decision:** The backend now self-initializes the default area on startup (in a background thread so the healthcheck is not blocked) and runs a scheduled risk-refresh worker every `RISK_REFRESH_MINUTES` (default 15). Startup logic is consolidated into the FastAPI `lifespan`; the deprecated `@app.on_event("startup")` was removed. No new risk-state table was added.
+- **Rationale / deviation from plan:** The plan assumed PostGIS was in the backend stack. It is not — the FastAPI backend has no DB driver, and the Supabase schema uses plain `DOUBLE PRECISION` lat/lng with a custom haversine function (no `geometry`/`ST_` usage). All risk inputs are re-derivable from durable external sources: NYC Open Data (live) and the Supabase `reports` table (verified community reports, already durable). So durability is achieved by re-deriving state on every boot plus scheduled refresh, rather than persisting a derived grid. This is leaner (no asyncpg dependency, no connection pool) and keeps a single source of truth.
+- **Consequence for P1-1:** Community-report durability and loop closure move to a *pull* model — `fetch_risk_data` will read verified rows from Supabase `reports` (via PostgREST + anon key; RLS already allows public SELECT) on each refresh. This supersedes the plan's edge-function *push* to `/incident`. The in-memory `/incident` endpoint remains for immediate/manual updates but is not the durability mechanism.
+- **Alternatives rejected:** Direct Postgres (asyncpg) writing a risk grid table (heavier, redundant with re-derivable sources); local file snapshot of the grid (single-worker, staler than re-fetch).
+- **Still open:** confirm this pull-based approach with the founder before implementing P1-1; document backend env vars (`SAFESTEP_CACHE_DIR`, `SAFESTEP_AREA`, `CORS_ALLOW_ORIGINS`, `RISK_REFRESH_MINUTES`, `NYC_OPEN_DATA_APP_TOKEN`, Supabase read creds) in a backend `.env.example`.
+
+## 2026-07-05 — Consolidate routing onto `/route/app`, delete on-device stack (P0-2)
+- **Decision:** `MapScreen.fetchRoutes` now calls `POST /route/app` and consumes its frontend-shaped response directly (coordinates already `{latitude, longitude}`, distance in miles, safetyScore 0-100). Deleted the orphaned on-device routing stack: `safeRouteService`, `routingService`, `astarService`, `temporalRoutingService`, `graphService`, `graphBuilder`, `densityPredictionService`, `riskScoringService`, and pruned their barrel exports. Kept `mapbox` (geocoding + health check) and `spatialIndexService`/`crimeData`.
+- **Rationale:** The client's prior `/route` call was already broken against the real contract (sent `[lat,lng]` arrays and read `route.coordinates`/`distance_m`/`markers` that the endpoint never returns), so the app effectively always fell back to demo data. `/route/app` returns exactly the UI shape, removing client-side re-scoring. The deleted stack had zero importers outside `src/services/` and its own closed cluster (verified by grep across `src/`, including exported constant names). Also stopped populating raw incident markers (agent-context §2.2: no crime overlays).
+- **Alternatives rejected:** Standardizing on `/route` (would require client-side reshaping the backend already does in `/route/app`); keeping the dead stack behind a flag (spec: retired path removed or demoted, and it was unreachable).
+- **Offline state (P0-2, done):** Removed the `DEMO_ROUTES` fallback entirely. `MapScreen` now seeds empty routes and tracks `routingStatus` ('loading' | 'ready' | 'offline'). When the routing API is unreachable it shows an explicit "Routing unavailable" banner with a Retry action and renders no route overlay — never demo routes presented as real. The placeholder "8 reports near WSP" alert is now gated to only show when routes load, with a TODO for the P1-4 copy audit. Chosen treatment: banner + retry, no fake routes.
+- **Known dependency:** `/route/app` returns HTTP 400 until the backend area is initialized (`POST /initialize`). The deployed backend must self-initialize at startup — folded into P0-3 (durable state + startup readiness).
+
+## 2026-07-05 — Backend hardening (P0-1 code portion)
+- **Decision:** Added `routing/config.py` as the single env-driven config source with fail-loud `validate()` run from a FastAPI `lifespan` at startup. CORS now reads `CORS_ALLOW_ORIGINS` (empty default) with `allow_credentials=False`. Graph + OSMnx caches now write under one env-driven root `SAFESTEP_CACHE_DIR` (`/app/cache` in the container, `.safestep_cache/` locally). `docker-compose.yml` passes secrets through from host env; `Dockerfile` sets `SAFESTEP_CACHE_DIR` (replacing the unused `OSMNX_CACHE_FOLDER`).
+- **Rationale:** `allow_origins=["*"]` + `allow_credentials=True` is invalid per the CORS spec (browsers reject it); the RN app sends no Origin header so locking origins is safe. The prior cache wrote to `./graph_cache` and `routing/.cache` while the volume mounted `/app/cache`, so the graph was never actually durable — aligning both under the mounted volume fixes it. Config-over-constants and fail-loud startup are agent-context §6 requirements.
+- **Alternatives rejected:** Deprecated `@app.on_event("startup")` (FastAPI 0.109 supports `lifespan`); import-time validation (would break pytest collection in P1-3); hardcoding origins/paths (violates config-over-constants).
+- **Deferred:** actual host provisioning, TLS, and real-hostname deploy — blocked on the host decision (kept host-agnostic).
+
+## 2026-07-05 — Swap retired NYC 911 dataset `8zsp-zqpf` → `n2zq-pubd`
+- **Decision:** `risk_service.py` `NYC_911_CALLS` now points at `n2zq-pubd` (NYPD Calls for Service).
+- **Rationale:** `8zsp-zqpf` returns HTTP 404 (retired). Verified against the live API that `n2zq-pubd` exposes every field the ingest reads: `latitude`, `longitude`, `typ_desc`, `cad_evnt_id`, `create_date`. Folded in from the Desktop clone's uncommitted fix.
+- **Alternatives rejected:** Leaving the dead endpoint (silent empty results, no 911 signal). Deeper Socrata field-type validation is deferred to the P0-4 ingest-validation task, not this mechanical swap.

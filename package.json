@@ -9,7 +9,8 @@
     "android": "expo run:android",
     "ios": "expo run:ios",
     "web": "expo start --web",
-    "backend": "cd backend && uvicorn routing.api:app --reload --port 8000"
+    "backend": "cd backend && uvicorn routing.api:app --reload --port 8000",
+    "test": "cd backend && python -m pytest"
   },
   "dependencies": {
     "@react-native-async-storage/async-storage": "2.2.0",

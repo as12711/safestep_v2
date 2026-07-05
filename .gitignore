@@ -43,6 +43,7 @@ yarn-error.*
 
 # Python
 __pycache__/
+.pytest_cache/
 *.pyc
 *.pyo
 *.pyd
@@ -63,6 +64,8 @@ backend/map_creation/*.csv
 backend/graph_cache/
 backend/**/cache/
 backend/routing/.cache/
+# Durable cache root (SAFESTEP_CACHE_DIR); local default is .safestep_cache/
+.safestep_cache/
 *.pkl
 
 # IDE

@@ -1,6 +1,7 @@
 /**
  * Services Index - Central export point
- * v4.0: Added A* routing, temporal routing, density prediction, spatial indexing
+ * Routing is server-side via the backend /route/app endpoint (see MapScreen).
+ * The former on-device A-star, temporal, and density stack was removed as dead code.
  */
 
 // Core infrastructure
@@ -24,29 +25,6 @@ export {
 
 // Safety data
 export { crimeDataService, INCIDENT_WEIGHTS } from './crimeData';
-export {
-  riskScoringService,
-  RISK_WEIGHTS,
-  INCIDENT_SEVERITY,
-  INFRASTRUCTURE_SAFETY,
-} from './riskScoringService';
-
-// Graph and routing (A* weighted graph traversal)
-export { navigationGraph, GraphNode, GraphEdge, NavigationGraph } from './graphService';
-export { astarService, PriorityQueue, AStarResult } from './astarService';
-export { safeRouteService } from './safeRouteService';
-
-// Temporal and density-aware routing
-export { 
-  temporalRoutingService, 
-  CachedRoute,
-  CACHE_CONFIG,
-} from './temporalRoutingService';
-export { 
-  densityPredictionService, 
-  HIGH_DENSITY_LOCATIONS,
-  DEFAULT_PATTERNS,
-} from './densityPredictionService';
 
 // Spatial indexing
 export { 

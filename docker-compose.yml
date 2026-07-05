@@ -13,11 +13,20 @@ services:
     environment:
       - PYTHONUNBUFFERED=1
       - LOG_LEVEL=INFO
-      # Add your environment variables here:
-      # - SUPABASE_URL=${SUPABASE_URL}
-      # - SUPABASE_KEY=${SUPABASE_KEY}
+      # Durable cache root (matches the volume mount below).
+      - SAFESTEP_CACHE_DIR=/app/cache
+      # Area the pilot serves.
+      - SAFESTEP_AREA=${SAFESTEP_AREA:-nyu}
+      # Browser origins allowed to call the API (comma-separated). Empty is
+      # correct for the mobile-only pilot; the RN app sends no Origin header.
+      - CORS_ALLOW_ORIGINS=${CORS_ALLOW_ORIGINS:-}
+      # Secrets are passed through from the host env / .env, never committed.
+      - NYC_OPEN_DATA_APP_TOKEN=${NYC_OPEN_DATA_APP_TOKEN:-}
+      - SUPABASE_URL=${SUPABASE_URL:-}
+      - SUPABASE_KEY=${SUPABASE_KEY:-}
     volumes:
-      # Mount cache directory for persistent graph storage
+      # Persist the built graph + OSMnx downloads across container recreation.
+      # config.py writes to /app/cache/{graphs,osmnx} under this volume.
       - routing-cache:/app/cache
       # Development: mount source for hot reload (uncomment if needed)
       # - ./backend/routing:/app/routing:ro

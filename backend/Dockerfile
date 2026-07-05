@@ -36,9 +36,10 @@ RUN pip install --no-cache-dir --upgrade pip \
 # Copy application code
 COPY routing/ ./routing/
 
-# Create cache directory for OSMnx graphs
+# Durable cache root (mount a volume here in compose/host to persist the graph
+# and OSMnx downloads across container recreation). Read by routing/config.py.
 RUN mkdir -p /app/cache
-ENV OSMNX_CACHE_FOLDER=/app/cache
+ENV SAFESTEP_CACHE_DIR=/app/cache
 
 # Expose API port
 EXPOSE 8000

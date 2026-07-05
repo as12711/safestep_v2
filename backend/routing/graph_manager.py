@@ -13,10 +13,13 @@ from pathlib import Path
 from typing import Optional, Tuple, Dict, Any
 from datetime import datetime, timedelta
 
-# Configure OSMnx
+from .config import settings
+
+# Configure OSMnx. Cache into the durable, env-driven cache root (the mounted
+# volume in the container) so downloads survive container recreation.
 ox.settings.use_cache = True
 ox.settings.log_console = False
-ox.settings.cache_folder = Path(__file__).parent / ".cache"
+ox.settings.cache_folder = settings.osmnx_cache_dir
 
 
 class GraphManager:
@@ -24,8 +27,10 @@ class GraphManager:
     Manages pedestrian network graphs for routing.
     """
     
-    def __init__(self, cache_dir: str = "./graph_cache"):
-        self.cache_dir = Path(cache_dir)
+    def __init__(self, cache_dir: Optional[str] = None):
+        # Default to the durable, env-driven graph-cache directory (under the
+        # mounted volume in the container). Overridable for tests.
+        self.cache_dir = Path(cache_dir) if cache_dir else settings.graph_cache_dir
         self.cache_dir.mkdir(parents=True, exist_ok=True)
         self.graphs: Dict[str, nx.MultiDiGraph] = {}
         self.graph_metadata: Dict[str, Dict] = {}

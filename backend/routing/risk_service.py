@@ -16,10 +16,36 @@ from datetime import datetime, timedelta
 from collections import defaultdict
 import math
 
+from .config import settings
+
 
 # NYC Open Data endpoints
-NYC_911_CALLS = "https://data.cityofnewyork.us/resource/8zsp-zqpf.json"
+NYC_911_CALLS = "https://data.cityofnewyork.us/resource/n2zq-pubd.json"  # NYPD Calls for Service (YTD); 8zsp-zqpf retired (404)
 NYC_COMPLAINTS = "https://data.cityofnewyork.us/resource/5uac-w243.json"
+
+# Fields the ingest depends on. If a returned row is missing these, the dataset
+# schema likely drifted: fail loudly rather than silently coercing to empty.
+REQUIRED_911_FIELDS = ("latitude", "longitude", "typ_desc", "create_date")
+REQUIRED_COMPLAINT_FIELDS = ("latitude", "longitude", "ofns_desc", "cmplnt_fr_dt", "law_cat_cd")
+
+
+def _nyc_headers() -> Dict[str, str]:
+    """Auth header for Socrata when an app token is configured."""
+    return {"X-App-Token": settings.nyc_app_token} if settings.nyc_app_token else {}
+
+
+def _require_schema(rows: Any, required: Tuple[str, ...], source: str) -> None:
+    """Fail loudly on schema drift. An empty result is valid (no rows in window)."""
+    if not isinstance(rows, list):
+        raise ValueError(f"{source}: expected a JSON array, got {type(rows).__name__}")
+    if not rows:
+        return
+    missing = [f for f in required if f not in rows[0]]
+    if missing:
+        raise ValueError(
+            f"{source}: response missing expected field(s) {missing}. "
+            f"Schema may have changed; received keys {sorted(rows[0].keys())}."
+        )
 
 
 # Incident severity scores (0 = minor, 1 = severe)
@@ -141,45 +167,47 @@ class RiskService:
             f"&$limit=500&$order=create_date DESC"
         )
         url = f"{NYC_911_CALLS}?{query}"
-        
+
         try:
-            async with session.get(url) as response:
+            async with session.get(url, headers=_nyc_headers()) as response:
                 if response.status != 200:
                     print(f"[RiskService] 911 API error: {response.status}")
                     return []
-                
                 data = await response.json()
-                
-                incidents = []
-                for item in data:
-                    try:
-                        lat = float(item.get("latitude", 0))
-                        lng = float(item.get("longitude", 0))
-                        if lat == 0 or lng == 0:
-                            continue
-                        
-                        incident_type = item.get("typ_desc", "UNKNOWN").upper()
-                        severity = INCIDENT_SEVERITY.get(incident_type, 0.2)
-                        
-                        incidents.append(Incident(
-                            id=item.get("cad_evnt_id", str(hash(str(item)))),
-                            type=incident_type,
-                            lat=lat,
-                            lng=lng,
-                            timestamp=datetime.fromisoformat(
-                                item.get("create_date", "2024-01-01T00:00:00")
-                            ),
-                            severity=severity,
-                            source="911",
-                        ))
-                    except Exception as e:
-                        continue
-                
-                return incidents
-                
         except Exception as e:
             print(f"[RiskService] 911 fetch error: {e}")
             return []
+
+        # Validate schema outside the network try/except so drift fails loudly
+        # instead of being swallowed as a transient fetch error.
+        _require_schema(data, REQUIRED_911_FIELDS, "NYC 911 (n2zq-pubd)")
+
+        incidents = []
+        for item in data:
+            try:
+                lat = float(item.get("latitude", 0))
+                lng = float(item.get("longitude", 0))
+                if lat == 0 or lng == 0:
+                    continue
+
+                incident_type = item.get("typ_desc", "UNKNOWN").upper()
+                severity = INCIDENT_SEVERITY.get(incident_type, 0.2)
+
+                incidents.append(Incident(
+                    id=item.get("cad_evnt_id", str(hash(str(item)))),
+                    type=incident_type,
+                    lat=lat,
+                    lng=lng,
+                    timestamp=datetime.fromisoformat(
+                        item.get("create_date", "2024-01-01T00:00:00")
+                    ),
+                    severity=severity,
+                    source="911",
+                ))
+            except Exception:
+                continue
+
+        return incidents
     
     async def _fetch_crimes(
         self,
@@ -198,54 +226,55 @@ class RiskService:
             f"&$limit=200&$order=cmplnt_fr_dt DESC"
         )
         url = f"{NYC_COMPLAINTS}?{query}"
-        
+
         try:
-            async with session.get(url) as response:
+            async with session.get(url, headers=_nyc_headers()) as response:
                 if response.status != 200:
+                    print(f"[RiskService] Crimes API error: {response.status}")
                     return []
-                
                 data = await response.json()
-                
-                incidents = []
-                for item in data:
-                    try:
-                        lat = float(item.get("latitude", 0))
-                        lng = float(item.get("longitude", 0))
-                        if lat == 0 or lng == 0:
-                            continue
-                        
-                        offense = item.get("ofns_desc", "UNKNOWN").upper()
-                        category = item.get("law_cat_cd", "")
-                        
-                        # Severity based on category
-                        if category == "FELONY":
-                            base_severity = 0.7
-                        elif category == "MISDEMEANOR":
-                            base_severity = 0.4
-                        else:
-                            base_severity = 0.2
-                        
-                        severity = INCIDENT_SEVERITY.get(offense, base_severity)
-                        
-                        incidents.append(Incident(
-                            id=item.get("cmplnt_num", str(hash(str(item)))),
-                            type=offense,
-                            lat=lat,
-                            lng=lng,
-                            timestamp=datetime.fromisoformat(
-                                item.get("cmplnt_fr_dt", "2024-01-01")
-                            ),
-                            severity=severity,
-                            source="nypd",
-                        ))
-                    except Exception:
-                        continue
-                
-                return incidents
-                
         except Exception as e:
             print(f"[RiskService] Crimes fetch error: {e}")
             return []
+
+        _require_schema(data, REQUIRED_COMPLAINT_FIELDS, "NYC complaints (5uac-w243)")
+
+        incidents = []
+        for item in data:
+            try:
+                lat = float(item.get("latitude", 0))
+                lng = float(item.get("longitude", 0))
+                if lat == 0 or lng == 0:
+                    continue
+
+                offense = item.get("ofns_desc", "UNKNOWN").upper()
+                category = item.get("law_cat_cd", "")
+
+                # Severity based on category
+                if category == "FELONY":
+                    base_severity = 0.7
+                elif category == "MISDEMEANOR":
+                    base_severity = 0.4
+                else:
+                    base_severity = 0.2
+
+                severity = INCIDENT_SEVERITY.get(offense, base_severity)
+
+                incidents.append(Incident(
+                    id=item.get("cmplnt_num", str(hash(str(item)))),
+                    type=offense,
+                    lat=lat,
+                    lng=lng,
+                    timestamp=datetime.fromisoformat(
+                        item.get("cmplnt_fr_dt", "2024-01-01")
+                    ),
+                    severity=severity,
+                    source="nypd",
+                ))
+            except Exception:
+                continue
+
+        return incidents
     
     # =========================================
     # GRID MANAGEMENT

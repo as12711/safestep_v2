@@ -4,6 +4,8 @@ SafeStep Routing API
 FastAPI endpoints for safe route calculation.
 """
 
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI, HTTPException, Query, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
@@ -11,6 +13,7 @@ from typing import List, Optional, Tuple
 from datetime import datetime
 import asyncio
 
+from .config import settings
 from .safe_router import safe_router, Route, SafeRouter
 from .weight_calculator import UserProfile, MobilityLevel
 from .risk_service import risk_service
@@ -124,17 +127,68 @@ class IncidentReport(BaseModel):
 # FASTAPI APP
 # =========================================
 
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Fail loudly on invalid configuration before serving any request.
+    settings.validate()
+    # Warm up in the background so startup (and the container healthcheck) is
+    # never blocked by a first-time graph build. With the durable graph cache
+    # (P0-1), subsequent boots load from pickle and are fast.
+    warmup = asyncio.create_task(_startup_warmup())
+    try:
+        yield
+    finally:
+        warmup.cancel()
+
+
+async def _startup_warmup():
+    """Self-initialize the default area, load risk data, then refresh on a loop.
+
+    Making the backend self-initialize means the routing path works right after
+    deploy without a manual POST /initialize. Risk data is re-derived from its
+    durable external sources on every boot and on a fixed schedule, so no
+    separate risk-state persistence layer is required.
+    """
+    try:
+        area = settings.default_area
+        print(f"[SafeStep API] Warming up area '{area}'...")
+        # initialize() is synchronous and CPU/IO heavy; run off the event loop.
+        ok = await asyncio.to_thread(safe_router.initialize, area)
+        if not ok:
+            print(f"[SafeStep API] Warmup could not initialize area '{area}'")
+            return
+        router_state["initialized"] = True
+        router_state["area_id"] = area
+        await fetch_risk_data()
+
+        # Scheduled refresh worker.
+        while True:
+            await asyncio.sleep(settings.risk_refresh_minutes * 60)
+            try:
+                await fetch_risk_data()
+            except Exception as e:  # never let one failed refresh kill the loop
+                print(f"[SafeStep API] Scheduled risk refresh failed: {e}")
+    except asyncio.CancelledError:
+        pass
+    except Exception as e:
+        print(f"[SafeStep API] Warmup error: {e}")
+
+
 app = FastAPI(
     title="SafeStep Routing API",
     description="A* weighted graph routing for safe pedestrian navigation",
     version="2.0.0",
+    lifespan=lifespan,
 )
 
-# CORS for mobile app
+# CORS. The React Native app does not send an Origin header, so it is unaffected
+# by this allowlist. Origins come from CORS_ALLOW_ORIGINS (empty by default).
+# allow_credentials stays False: wildcard + credentials is invalid per the CORS
+# spec and browsers reject it, and the API uses no cookie-based auth.
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
+    allow_origins=settings.cors_allow_origins,
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -465,18 +519,8 @@ async def fetch_risk_data():
     print(f"[API] Updated {updated} edge risk scores")
 
 
-# =========================================
-# STARTUP
-# =========================================
-
-@app.on_event("startup")
-async def startup():
-    """Initialize with default area on startup (optional)."""
-    print("[SafeStep API] Starting up...")
-    # Optionally auto-initialize with a default area:
-    # safe_router.initialize("manhattan")
-    # router_state["initialized"] = True
-    # router_state["area_id"] = "manhattan"
+# Startup/shutdown is handled by the lifespan handler defined above
+# (_startup_warmup): self-initialization + scheduled risk refresh.
 
 
 if __name__ == "__main__":

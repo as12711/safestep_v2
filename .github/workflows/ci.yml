@@ -16,13 +16,14 @@ name: CI
 
 on:
   push:
-    branches: ["**"]
+    branches: [main, "pilot/**"]
   pull_request:
 
 jobs:
   unit:
     name: Backend unit tests (light deps)
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
 
@@ -42,7 +43,7 @@ jobs:
   full:
     name: Full suite (geospatial deps + API tests)
     runs-on: ubuntu-latest
-    continue-on-error: true
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
 
@@ -52,11 +53,19 @@ jobs:
           python-version: "3.11"
           cache: pip
 
+      # Only the geospatial/GDAL install is allowed to be flaky. continue-on-error
+      # is scoped to this step (not the job), so a failed install does not fail the
+      # job, but the test step below still gates: a successful install with failing
+      # API tests goes red.
       - name: Install full backend requirements
+        id: install
+        continue-on-error: true
         run: |
           python -m pip install --upgrade pip
           python -m pip install -r backend/requirements.txt
 
+      # Skip (rather than error confusingly) when the install step did not succeed.
       - name: Run full test suite (includes guarded API tests)
+        if: steps.install.outcome == 'success'
         working-directory: backend
         run: python -m pytest -v

@@ -74,6 +74,11 @@ const ConsentStep = memo(({
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(30)).current;
 
+  // Re-entrancy guard: a fast double-tap on the agree button must not log a
+  // duplicate consent_granted event or call onNext twice (which would skip the
+  // Permissions step). handleAgree runs exactly once.
+  const submitted = useRef(false);
+
   useEffect(() => {
     if (isActive) {
       Animated.parallel([
@@ -93,6 +98,9 @@ const ConsentStep = memo(({
   }, [isActive]);
 
   const handleAgree = useCallback(() => {
+    if (submitted.current) return;
+    submitted.current = true;
+
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
 
     const timestamp = new Date().toISOString();

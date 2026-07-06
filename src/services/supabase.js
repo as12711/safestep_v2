@@ -645,6 +645,11 @@ class SupabaseService {
     if (!ENV.ENABLE_ANALYTICS) return { data: null, error: null };
     // P1-4 consent gate: never fire analytics before the user has granted
     // consent. ConsentStep flips this on right before it logs consent_granted.
+    // NOTE: this gate is intentionally closed (false) on every fresh launch
+    // until SettingsContext hydrates the persisted consent decision from
+    // AsyncStorage and calls setAnalyticsConsent. For an already-consented
+    // returning user there is a brief window at startup where events are
+    // dropped; that is expected, not a "missing first event" bug to chase.
     if (!this.analyticsConsent) return { data: null, error: null };
 
     return this.request('/rest/v1/analytics', {

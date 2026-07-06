@@ -4,11 +4,17 @@
  * Expo/EAS build configuration
  */
 
+// Single source of truth for the MOBILE app version: package.json. Both the
+// Expo `version` and the runtime `extra.APP_VERSION` derive from it so they
+// cannot drift. This is distinct from the backend API contract version in
+// backend/routing/api.py.
+const { version } = require('./package.json');
+
 export default {
   expo: {
     name: "SafeStep",
     slug: "safestep",
-    version: "1.0.0",
+    version,
     orientation: "portrait",
     icon: "./assets/icon.png",
     userInterfaceStyle: "dark",
@@ -110,7 +116,8 @@ export default {
       MAPBOX_ACCESS_TOKEN: process.env.MAPBOX_ACCESS_TOKEN,
       SENTRY_DSN: process.env.SENTRY_DSN,
       ROUTING_API_URL: process.env.ROUTING_API_URL,
-      APP_VERSION: "1.0.0",
+      // Read at runtime by src/config/env.js via Constants.expoConfig.extra.
+      APP_VERSION: version,
       eas: {
         projectId: "919c21fd-780e-49f9-944b-b7493f590959"
       }

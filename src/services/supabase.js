@@ -438,9 +438,13 @@ class SupabaseService {
   static PROXIMITY_THRESHOLD = 15;
 
   async createPendingReport(report) {
-    // Pilot analytics: "report submitted" (consent-gated in logEvent). Fired
-    // once per submission at the single service entry point, so it covers every
-    // report UI without double-counting. Coarse category id only -- never the
+    // Pilot analytics: "report submitted" (consent-gated in logEvent). Fired at
+    // the single service entry point, so it covers every report UI without
+    // double-counting. NOTE: this counts submission ATTEMPTS, not created
+    // reports -- it fires before the duplicate check and the DB write, so it
+    // includes failed writes and duplicate-merges (which route to
+    // submitVerification and create no new report). Read the metric as
+    // "user submission intents." Coarse category id only -- never the
     // description, photo, or coordinates.
     this.logEvent('report_submitted', { type: report.type });
 

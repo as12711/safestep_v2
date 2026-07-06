@@ -24,7 +24,7 @@ Copy the templates, never commit the filled-in files.
 - `RNMAPBOX_MAPS_DOWNLOAD_TOKEN` (secret `sk.*`, native/EAS build only)
 - `SENTRY_DSN` (recommended for production crash reporting)
 - `ROUTING_API_URL` (set the production URL; must not be `localhost` in prod)
-- `NODE_ENV`, `ENABLE_ANALYTICS`, `DEBUG_MODE` (flags)
+- `NODE_ENV`, `ENABLE_ANALYTICS`, `ENABLE_GUARDIAN_SUBSCRIPTION`, `DEBUG_MODE` (flags)
 
 The mobile app version is NOT env-configured. It comes from `package.json`.
 

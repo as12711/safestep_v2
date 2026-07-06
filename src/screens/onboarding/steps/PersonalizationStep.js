@@ -113,7 +113,7 @@ const PersonalizationStep = memo(({
               isFocused={focusedInput === 'home'}
               onFocus={() => setFocusedInput('home')}
               onBlur={() => setFocusedInput(null)}
-              description="We'll help you find safe routes home anytime"
+              description="We'll help you find safety-informed routes home anytime"
             />
 
             {/* Work address */}

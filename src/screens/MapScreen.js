@@ -702,7 +702,7 @@ const MapScreen = memo(({
               {routingStatus === 'ready' && (
                 <View style={styles.alertBanner}>
                   <Text style={styles.alertBannerText}>
-                    🔔 8 reports near WSP tonight — safest route highlighted
+                    🔔 8 reports near WSP tonight. Safety-informed route highlighted.
                   </Text>
                 </View>
               )}
@@ -748,7 +748,7 @@ const MapScreen = memo(({
                 <View style={styles.emptyState}>
                   <Text style={styles.emptyStateIcon}>🕵️</Text>
                   <Text style={styles.emptyStateTitle}>Too safe for these streets?</Text>
-                  <Text style={styles.emptyStateText}>No routes match your filters. Try relaxing a few — even superheroes take the long way sometimes.</Text>
+                  <Text style={styles.emptyStateText}>No routes match your filters. Try relaxing a few. Even superheroes take the long way sometimes.</Text>
                   <TouchableOpacity
                     style={styles.emptyStateReset}
                     onPress={() => dispatchFilter({ type: 'CLEAR' })}

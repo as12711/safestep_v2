@@ -220,7 +220,7 @@ const ReadyStep = memo(({ isActive, userData, onComplete, onBack }) => {
         {/* Title */}
         <Text style={styles.title}>You're ready!</Text>
         <Text style={styles.subtitle}>
-          SafeStep is set up and ready to guide you safely.
+          SafeStep is set up and ready to offer route suggestions.
         </Text>
 
         {/* Completion summary */}
@@ -266,7 +266,7 @@ const ReadyStep = memo(({ isActive, userData, onComplete, onBack }) => {
       {/* Launch button */}
       <View style={styles.actions}>
         <OnboardingButton
-          label="Start Walking Safely"
+          label="Start Walking"
           onPress={onComplete}
           variant="primary"
           icon="→"

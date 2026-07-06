@@ -580,7 +580,7 @@ class LocationService {
         showsBackgroundLocationIndicator: true, // iOS blue bar
         foregroundService: {
           notificationTitle: 'SafeStep Navigation',
-          notificationBody: 'Guiding you safely...',
+          notificationBody: 'Navigation in progress...',
           notificationColor: '#00f5d4',
         },
         pausesUpdatesAutomatically: false,

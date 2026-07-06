@@ -6,10 +6,11 @@
  * Flow:
  * 1. Welcome - The hook, what SafeStep is
  * 2. How It Works - Community-powered safety explanation
- * 3. Permissions - Location & notifications
- * 4. Personalization - Home/work addresses
- * 5. Community - Optional pledge to contribute
- * 6. Ready - First route suggestion
+ * 3. Consent - Explicit opt-in before any data collection (P1-4)
+ * 4. Permissions - Location & notifications
+ * 5. Personalization - Home/work addresses
+ * 6. Community - Optional pledge to contribute
+ * 7. Ready - First route suggestion
  */
 
 import React, { useState, useCallback, useRef, useEffect } from 'react';
@@ -28,6 +29,7 @@ import { theme } from '../../theme/designSystem';
 // Onboarding steps
 import WelcomeStep from './steps/WelcomeStep';
 import HowItWorksStep from './steps/HowItWorksStep';
+import ConsentStep from './steps/ConsentStep';
 import PermissionsStep from './steps/PermissionsStep';
 import PersonalizationStep from './steps/PersonalizationStep';
 import CommunityStep from './steps/CommunityStep';
@@ -39,6 +41,7 @@ const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const STEPS = [
   { id: 'welcome', Component: WelcomeStep },
   { id: 'how-it-works', Component: HowItWorksStep },
+  { id: 'consent', Component: ConsentStep },
   { id: 'permissions', Component: PermissionsStep },
   { id: 'personalization', Component: PersonalizationStep },
   { id: 'community', Component: CommunityStep },
@@ -53,6 +56,7 @@ const OnboardingScreen = ({ onComplete }) => {
     notificationsEnabled: false,
     locationEnabled: false,
     communityPledge: false,
+    consentGranted: false,
   });
 
   const scrollX = useRef(new Animated.Value(0)).current;
@@ -86,17 +90,23 @@ const OnboardingScreen = ({ onComplete }) => {
     }
   }, [currentStep]);
 
-  // Skip to end (for users who want to skip)
+  // Skip ahead. P1-4: skipping must never bypass the consent gate, so the
+  // furthest a skip can land is the consent step. The user still has to
+  // affirmatively agree there before continuing to any data collection.
   const handleSkip = useCallback(() => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    const lastStep = STEPS.length - 1;
-    setCurrentStep(lastStep);
+    const consentIndex = STEPS.findIndex((s) => s.id === 'consent');
+    const target = consentIndex >= 0 ? consentIndex : STEPS.length - 1;
 
+    // Only ever skip forward.
+    if (target <= currentStep) return;
+
+    setCurrentStep(target);
     scrollViewRef.current?.scrollTo({
-      x: lastStep * SCREEN_WIDTH,
+      x: target * SCREEN_WIDTH,
       animated: true,
     });
-  }, []);
+  }, [currentStep]);
 
   // Update user data from steps
   const handleUpdateData = useCallback((key, value) => {

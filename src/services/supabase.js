@@ -62,6 +62,19 @@ class SupabaseService {
     this.refreshPromise = null; // Prevent concurrent refreshes
     this.initialized = false;
     this.offlineQueue = [];
+    // Analytics consent gate (P1-4). Defaults to false so no analytics fire
+    // before the user has affirmatively granted consent during onboarding.
+    // SettingsContext hydrates this from the persisted consent decision.
+    this.analyticsConsent = false;
+  }
+
+  /**
+   * Set the analytics consent gate. When false, logEvent is a no-op.
+   * Called by SettingsContext (on load and on change) and by the onboarding
+   * ConsentStep the moment the user affirmatively agrees.
+   */
+  setAnalyticsConsent(granted) {
+    this.analyticsConsent = granted === true;
   }
 
   // ===========================================
@@ -630,6 +643,9 @@ class SupabaseService {
 
   async logEvent(eventType, eventData = {}) {
     if (!ENV.ENABLE_ANALYTICS) return { data: null, error: null };
+    // P1-4 consent gate: never fire analytics before the user has granted
+    // consent. ConsentStep flips this on right before it logs consent_granted.
+    if (!this.analyticsConsent) return { data: null, error: null };
 
     return this.request('/rest/v1/analytics', {
       method: 'POST',

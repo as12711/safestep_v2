@@ -15,6 +15,8 @@ import React, {
 } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
+import { supabase } from '../services';
+
 // Storage key
 const SETTINGS_KEY = 'ss_settings';
 
@@ -54,6 +56,16 @@ export const DEFAULT_SETTINGS = {
   homeBeaconEnabled: true,
   autoNotifyOnArrival: true,
   sosEnabled: true,
+
+  // Consent (P1-4) - explicit, opt-in. Default is no consent granted.
+  // These are set to true only when the user affirmatively agrees in the
+  // onboarding ConsentStep, before any data is collected.
+  consentGranted: false,
+  consentLocation: false,
+  consentReportStorage: false,
+  consentAnalytics: false,
+  consentTimestamp: null,
+  consentVersion: null,
 };
 
 // ===========================================
@@ -86,6 +98,16 @@ export const SettingsProvider = ({ children }) => {
   useEffect(() => {
     loadSettings();
   }, []);
+
+  /**
+   * Keep the analytics consent gate on the backend service in sync with the
+   * persisted consent decision (P1-4). Analytics events are dropped by the
+   * service until the user has affirmatively granted analytics consent. This
+   * runs on mount (default: no consent) and whenever the decision changes.
+   */
+  useEffect(() => {
+    supabase?.setAnalyticsConsent?.(settings.consentAnalytics === true);
+  }, [settings.consentAnalytics]);
 
   const loadSettings = async () => {
     try {

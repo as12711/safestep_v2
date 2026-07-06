@@ -23,7 +23,7 @@ services:
       # Secrets are passed through from the host env / .env, never committed.
       - NYC_OPEN_DATA_APP_TOKEN=${NYC_OPEN_DATA_APP_TOKEN:-}
       - SUPABASE_URL=${SUPABASE_URL:-}
-      - SUPABASE_KEY=${SUPABASE_KEY:-}
+      - SUPABASE_ANON_KEY=${SUPABASE_ANON_KEY:-}
     volumes:
       # Persist the built graph + OSMnx downloads across container recreation.
       # config.py writes to /app/cache/{graphs,osmnx} under this volume.

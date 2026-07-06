@@ -186,11 +186,13 @@ const filterSatisfies = (route, key) => {
 const PREFERENCE_FILTER_KEYS = new Set(['busyAreas', 'avoidPolice']);
 
 // Demo safety markers along the routes
+// Safety-resource markers only (blue-light phones, safe havens). We deliberately
+// do NOT render incident/crime markers on the map (agent-context §2.2: no raw
+// crime overlays or area "danger" labels).
 const DEMO_MARKERS = [
   { id: 'bl-1', type: 'blueLight', coordinate: { latitude: 40.7285, longitude: -73.9900 } },
   { id: 'bl-2', type: 'blueLight', coordinate: { latitude: 40.7300, longitude: -73.9955 } },
   { id: 'sh-1', type: 'safeHaven', coordinate: { latitude: 40.7272, longitude: -73.9870 } },
-  { id: 'inc-1', type: 'incident', coordinate: { latitude: 40.7275, longitude: -73.9930 }, severity: 0.6 },
 ];
 
 const MapScreen = memo(({
@@ -215,7 +217,6 @@ const MapScreen = memo(({
   const [showFilters, setShowFilters] = useState(false);
   const [sheetCollapsed, setSheetCollapsed] = useState(false);
   const [activeFilters, dispatchFilter] = useReducer(filtersReducer, FILTER_INITIAL);
-  const [crimeMarkers, setCrimeMarkers] = useState([]);
 
   // Navigation simulation state
   const [navStep, setNavStep]       = useState(0);
@@ -620,20 +621,8 @@ const MapScreen = memo(({
         scrollEnabled={true}
         zoomEnabled={true}
       >
-        {/* Safety markers */}
+        {/* Safety-resource markers (blue lights, safe havens). No crime overlay. */}
         {DEMO_MARKERS.map(renderMarker)}
-
-        {/* Crime incident markers from backend */}
-        {crimeMarkers.map((m, i) => (
-          <Circle
-            key={`crime-${i}`}
-            center={{ latitude: m.lat, longitude: m.lon }}
-            radius={30}
-            fillColor="rgba(255,60,60,0.25)"
-            strokeColor="rgba(255,60,60,0.6)"
-            strokeWidth={1}
-          />
-        ))}
 
         {/* During navigation: only the active route (split completed/remaining).
             During selection: selected route + up to 4 alternatives (5 total on map). */}
@@ -720,11 +709,10 @@ const MapScreen = memo(({
 
           {!sheetCollapsed && (
             <>
-              {/* TODO(P1-4 copy audit): this report count is placeholder copy. */}
               {routingStatus === 'ready' && (
                 <View style={styles.alertBanner}>
                   <Text style={styles.alertBannerText}>
-                    🔔 8 reports near WSP tonight. Safety-informed route highlighted.
+                    🔔 Safety-informed route highlighted
                   </Text>
                 </View>
               )}

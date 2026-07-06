@@ -26,6 +26,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { useSettings } from '../contexts/SettingsContext';
 import { useApp } from '../contexts/AppContext';
 import { ENV } from '../config/env';
+import { supabase } from '../services';
 
 // Components
 import SafetyHeader from '../components/map/SafetyHeader';
@@ -84,6 +85,11 @@ const DARK_MAP_STYLE = [
 // DESTINATION: Washington Square Arch (center of WSP)
 const ORIGIN = { latitude: 40.7294, longitude: -73.9905 };
 const DESTINATION = { latitude: 40.7308, longitude: -73.9973 };
+
+// Coarse pilot area label for analytics. This is the whole pilot region, not a
+// precise location: it matches the backend SAFESTEP_AREA ("nyu"). Analytics
+// events never carry user coordinates or a location trail (agent-context §2.3).
+const PILOT_AREA = 'nyu';
 
 
 // Backend API
@@ -239,6 +245,13 @@ const MapScreen = memo(({
         setRoutes(result.routes);
         setSelectedRoute(result.routes[0]);
         setRoutingStatus('ready');
+        // Pilot analytics (consent-gated in supabase.logEvent). Fires once per
+        // completed request, only on the success path. Coarse fields only:
+        // the pilot area label and the number of routes returned, no coords.
+        supabase.logEvent('route_requested', {
+          area: PILOT_AREA,
+          route_count: result.routes.length,
+        });
       } else {
         setRoutes([]);
         setSelectedRoute(null);
@@ -343,6 +356,9 @@ const MapScreen = memo(({
         clearInterval(navTimerRef.current);
         setNavStep(totalSteps);
         setNavArrived(true);
+        // Pilot analytics: navigation completed (arrival). Fires once, since the
+        // interval is cleared here. Coarse: route id only, no coords/trail.
+        supabase.logEvent('navigation_completed', { route_id: route?.id });
         // Celebratory haptic burst
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
         setTimeout(() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy), 200);
@@ -417,6 +433,12 @@ const MapScreen = memo(({
     setNavArrived(false);
     setShowReview(false);
     onNavigationStart?.(effectiveSelected);
+    // Pilot analytics: "route taken" (navigation started). Coarse fields only:
+    // the route id and its safety score, never origin/destination coords.
+    supabase.logEvent('navigation_started', {
+      route_id: effectiveSelected.id,
+      safety_score: effectiveSelected.safetyScore,
+    });
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     setTimeout(() => {
       mapRef.current?.animateToRegion({

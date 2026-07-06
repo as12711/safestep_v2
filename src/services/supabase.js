@@ -438,6 +438,12 @@ class SupabaseService {
   static PROXIMITY_THRESHOLD = 15;
 
   async createPendingReport(report) {
+    // Pilot analytics: "report submitted" (consent-gated in logEvent). Fired
+    // once per submission at the single service entry point, so it covers every
+    // report UI without double-counting. Coarse category id only -- never the
+    // description, photo, or coordinates.
+    this.logEvent('report_submitted', { type: report.type });
+
     const isAmbient = SupabaseService.AMBIENT_TYPES.includes(report.type);
     const isHighPriority = SupabaseService.HIGH_PRIORITY_TYPES.includes(report.type);
 

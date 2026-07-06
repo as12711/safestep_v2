@@ -73,6 +73,68 @@ INCIDENT_SEVERITY = {
 }
 
 
+# Community report ingest (P1-1)
+# ------------------------------
+# Verified community reports live in Supabase's public `reports` table and are
+# pulled on each scheduled risk refresh (PULL model, no push/edge-function).
+# Equity constraint (agent-context §2.1): these are COARSE hazard / lighting /
+# "avoid" flags, NOT granular crime incidents. Each report `type` maps to a
+# conservative environmental-hazard severity kept well below the violent-crime
+# tier in INCIDENT_SEVERITY (max here is 0.5; the violent tier starts at 0.80),
+# so a community flag can nudge edge weighting without ever reading like a
+# felony. Reassuring reports (well lit, busy, police present, etc.) carry 0.0:
+# the grid only accumulates risk, so they simply add no weight. Unknown types
+# get a small default. The `type` strings are the report category ids the app
+# writes -- see src/screens/reporting/ReportingScreen.js REPORT_CATEGORIES and
+# src/services/supabase.js AMBIENT_TYPES / HIGH_PRIORITY_TYPES.
+SUPABASE_REPORTS_PATH = "/rest/v1/reports"
+
+# Fields the community ingest depends on (mirrors the NYC _require_schema guard).
+REQUIRED_COMMUNITY_FIELDS = ("id", "type", "lat", "lng", "ts")
+
+# Only pull reports from the recent window. The grid's temporal decay already
+# drives anything past ~72h toward negligible weight (see
+# _calculate_cell_crime_score), so a 7-day window captures every report that can
+# still matter, with margin.
+COMMUNITY_WINDOW_DAYS = 7
+
+COMMUNITY_SEVERITY = {
+    # Lighting (a core SafeStep signal)
+    "dark": 0.35,          # poor lighting
+    "broken": 0.35,        # broken street light
+    "lit": 0.0,            # well lit (reassuring; adds no risk)
+    # Crowd / isolation
+    "empty": 0.30,         # deserted
+    "quiet": 0.20,         # very quiet / low foot traffic
+    "busy": 0.0,           # busy area (reassuring)
+    "crowd": 0.0,          # legacy alias for a busy/crowd report
+    # Environmental hazards (force caution or reroute)
+    "flooding": 0.35,
+    "blocked": 0.30,       # path blocked
+    "hazard": 0.30,        # legacy generic hazard flag
+    "construction": 0.25,
+    "slippery": 0.25,
+    "closed": 0.25,        # legacy closed path / business
+    # Safety observations (coarse community flags, NOT verified crimes)
+    "harassment": 0.50,
+    "suspicious": 0.40,
+    "police": 0.0,         # police present (reassuring)
+    "security": 0.0,       # security present (reassuring)
+    # Accessibility
+    "elevator-out": 0.20,
+    "stairs": 0.15,
+    "ramp": 0.0,           # ramp available (reassuring)
+    # Positive
+    "safe": 0.0,           # all clear
+    "clean": 0.0,
+    "open-business": 0.0,
+}
+
+# Unknown types get a small, conservative default -- present enough to register,
+# far below any crime severity.
+COMMUNITY_DEFAULT_SEVERITY = 0.15
+
+
 @dataclass
 class Incident:
     """A safety incident."""
@@ -82,7 +144,49 @@ class Incident:
     lng: float
     timestamp: datetime
     severity: float
-    source: str  # "911", "nypd", "crowdsource"
+    source: str  # "911", "nypd", "community", "crowdsource"
+
+
+def _reports_to_incidents(rows: Any, cutoff: datetime) -> List[Incident]:
+    """Map verified-report rows (PostgREST JSON) to community Incidents.
+
+    Pure and synchronous so it can be unit-tested without a live Supabase.
+    `ts` is epoch MILLISECONDS; we convert to a naive local datetime to match
+    the timestamps the NYC ingest produces (datetime.fromisoformat of a naive
+    string), keeping the grid's `datetime.now() - timestamp` decay consistent
+    across sources. Rows older than `cutoff` are dropped as defense in depth --
+    the query already filters by ts, but a stale row must never leak in.
+    Malformed rows are skipped, matching the NYC per-row tolerance.
+    """
+    cutoff_ms = cutoff.timestamp() * 1000
+    incidents: List[Incident] = []
+    for item in rows:
+        try:
+            ts_ms = float(item["ts"])
+            if ts_ms < cutoff_ms:
+                continue
+
+            lat = float(item["lat"])
+            lng = float(item["lng"])
+            if lat == 0 or lng == 0:
+                continue
+
+            report_type = str(item.get("type", "")).lower()
+            severity = COMMUNITY_SEVERITY.get(report_type, COMMUNITY_DEFAULT_SEVERITY)
+
+            incidents.append(Incident(
+                id=str(item.get("id", hash(str(item)))),
+                type=report_type,
+                lat=lat,
+                lng=lng,
+                timestamp=datetime.fromtimestamp(ts_ms / 1000),
+                severity=severity,
+                source="community",
+            ))
+        except (KeyError, TypeError, ValueError):
+            continue
+
+    return incidents
 
 
 @dataclass
@@ -110,6 +214,9 @@ class RiskService:
         self.incidents: List[Incident] = []
         self.last_fetch: Optional[datetime] = None
         self.cache_duration = timedelta(minutes=15)
+        # Log the "Supabase unconfigured, skipping community pull" notice once,
+        # not on every scheduled refresh.
+        self._community_skip_logged = False
     
     # =========================================
     # DATA FETCHING
@@ -143,7 +250,14 @@ class RiskService:
             # Fetch crime complaints (last 7 days)
             crimes = await self._fetch_crimes(session, bounds, days_back=7)
             incidents.extend(crimes)
-        
+
+            # Pull verified community reports (P1-1 PULL model). Coarse
+            # hazard/lighting flags that weight edges alongside NYC data;
+            # skipped gracefully when Supabase is unconfigured. Added to the
+            # combined list BEFORE _update_grid so they land in the same grid.
+            community = await self.fetch_community_reports(session, bounds)
+            incidents.extend(community)
+
         self.incidents = incidents
         self.last_fetch = datetime.now()
         
@@ -275,7 +389,66 @@ class RiskService:
                 continue
 
         return incidents
-    
+
+    async def fetch_community_reports(
+        self,
+        session: aiohttp.ClientSession,
+        bounds: Tuple[float, float, float, float],
+        window_days: int = COMMUNITY_WINDOW_DAYS,
+    ) -> List[Incident]:
+        """Pull verified community reports from Supabase (PULL model, P1-1).
+
+        Returns coarse community Incidents (source="community") for the recent
+        window, mapped conservatively via COMMUNITY_SEVERITY. Gated on Supabase
+        config: if SUPABASE_URL / SUPABASE_ANON_KEY are unset this deployment
+        has no community source, so we skip (logging once) and return []. A
+        network error degrades to [] like the NYC fetchers -- a community
+        outage must never break a risk refresh.
+        """
+        base = settings.supabase_url
+        key = settings.supabase_key
+        if not base or not key:
+            if not self._community_skip_logged:
+                print(
+                    "[RiskService] Supabase not configured (SUPABASE_URL / "
+                    "SUPABASE_ANON_KEY unset); skipping community-report pull."
+                )
+                self._community_skip_logged = True
+            return []
+
+        north, south, east, west = bounds
+        cutoff = datetime.now() - timedelta(days=window_days)
+        cutoff_ms = int(cutoff.timestamp() * 1000)
+
+        # PostgREST: verified rows only, recent window, area bounds, minimal
+        # projection. RLS policy "Reports are viewable by everyone" permits this
+        # anonymous SELECT with the anon key.
+        query = (
+            "verified=eq.true"
+            "&select=id,type,lat,lng,ts"
+            f"&ts=gte.{cutoff_ms}"
+            f"&lat=gte.{south}&lat=lte.{north}"
+            f"&lng=gte.{west}&lng=lte.{east}"
+        )
+        url = f"{base.rstrip('/')}{SUPABASE_REPORTS_PATH}?{query}"
+        headers = {"apikey": key, "Authorization": f"Bearer {key}"}
+
+        try:
+            async with session.get(url, headers=headers) as response:
+                if response.status != 200:
+                    print(f"[RiskService] Community reports API error: {response.status}")
+                    return []
+                data = await response.json()
+        except Exception as e:
+            print(f"[RiskService] Community reports fetch error: {e}")
+            return []
+
+        # Validate schema outside the network try/except so drift fails loudly
+        # instead of being swallowed as a transient fetch error.
+        _require_schema(data, REQUIRED_COMMUNITY_FIELDS, "Supabase reports")
+
+        return _reports_to_incidents(data, cutoff)
+
     # =========================================
     # GRID MANAGEMENT
     # =========================================

@@ -15,6 +15,7 @@ import pytest
 
 from routing.risk_service import (
     Incident,
+    RiskService,
     _reports_to_incidents,
     _require_schema,
     COMMUNITY_SEVERITY,
@@ -89,6 +90,17 @@ class TestReportsToIncidents:
         incidents = _reports_to_incidents(rows, _default_cutoff())
         assert [i.id for i in incidents] == ["good"]
 
+    def test_absurd_ts_is_skipped_not_raised(self):
+        # datetime.fromtimestamp on an out-of-range ts raises OverflowError
+        # (OSError on some platforms). The bad row must be dropped, not abort
+        # the whole batch and discard the valid rows alongside it.
+        rows = [
+            {"id": "corrupt", "type": "dark", "lat": 40.73, "lng": -73.99, "ts": 1e30},
+            _row(report_type="dark", id="good"),
+        ]
+        incidents = _reports_to_incidents(rows, _default_cutoff())
+        assert [i.id for i in incidents] == ["good"]
+
 
 # =========================================
 # Severity mapping (agent-context §2.1)
@@ -158,3 +170,112 @@ class TestCommunitySchema:
     def test_non_list_payload_raises(self):
         with pytest.raises(ValueError, match="expected a JSON array"):
             _require_schema({"message": "no rows"}, REQUIRED_COMMUNITY_FIELDS, "Supabase reports")
+
+
+# =========================================
+# Async fetch_community_reports -- stubbed aiohttp (no live network)
+# =========================================
+
+# (north, south, east, west) -- matches the fetch_incidents bounds convention.
+_BOUNDS = (40.7400, 40.7200, -73.9800, -74.0100)
+
+
+class _FakeResponse:
+    """Minimal stand-in for an aiohttp response used as an async context mgr."""
+
+    def __init__(self, status, payload):
+        self.status = status
+        self._payload = payload
+
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, *exc):
+        return False
+
+    async def json(self):
+        return self._payload
+
+
+class _FakeSession:
+    """Captures the last session.get(url, headers=...) call for assertions."""
+
+    def __init__(self, status=200, payload=None):
+        self._status = status
+        self._payload = payload if payload is not None else []
+        self.calls = []
+
+    def get(self, url, headers=None):
+        self.calls.append({"url": url, "headers": headers})
+        return _FakeResponse(self._status, self._payload)
+
+
+def _configure_supabase(monkeypatch, url="https://proj.supabase.co", key="anon-key-xyz"):
+    import routing.risk_service as rs
+    monkeypatch.setattr(rs.settings, "supabase_url", url)
+    monkeypatch.setattr(rs.settings, "supabase_key", key)
+
+
+class TestFetchCommunityReportsAsync:
+    async def test_configured_issues_bounded_verified_query_with_auth_headers(self, monkeypatch):
+        _configure_supabase(monkeypatch, key="anon-key-xyz")
+        service = RiskService()
+        row = _row(report_type="dark", id="r1")
+        session = _FakeSession(status=200, payload=[row])
+
+        incidents = await service.fetch_community_reports(session, _BOUNDS)
+
+        assert len(session.calls) == 1
+        call = session.calls[0]
+        url = call["url"]
+        # Verified-only, recent-window, four bounds filters, and a bound.
+        assert "verified=eq.true" in url
+        assert "ts=gte." in url
+        north, south, east, west = _BOUNDS
+        assert f"lat=gte.{south}" in url
+        assert f"lat=lte.{north}" in url
+        assert f"lng=gte.{west}" in url
+        assert f"lng=lte.{east}" in url
+        assert "limit=" in url
+        # Auth headers for the anon PostgREST SELECT.
+        assert call["headers"]["apikey"] == "anon-key-xyz"
+        assert call["headers"]["Authorization"] == "Bearer anon-key-xyz"
+        # And the payload is mapped through to community incidents.
+        assert [i.id for i in incidents] == ["r1"]
+        assert incidents[0].source == "community"
+
+    async def test_unconfigured_returns_empty_and_logs_once(self, monkeypatch, capsys):
+        _configure_supabase(monkeypatch, url=None, key=None)
+        service = RiskService()
+        session = _FakeSession()
+
+        first = await service.fetch_community_reports(session, _BOUNDS)
+        second = await service.fetch_community_reports(session, _BOUNDS)
+
+        assert first == [] and second == []
+        # No HTTP attempted when unconfigured.
+        assert session.calls == []
+        # Skip notice printed exactly once across both calls.
+        out = capsys.readouterr().out
+        assert out.count("skipping community-report pull") == 1
+
+    async def test_missing_only_key_is_treated_as_unconfigured(self, monkeypatch):
+        _configure_supabase(monkeypatch, url="https://proj.supabase.co", key=None)
+        service = RiskService()
+        session = _FakeSession()
+
+        result = await service.fetch_community_reports(session, _BOUNDS)
+
+        assert result == []
+        assert session.calls == []
+
+    async def test_non_200_returns_empty(self, monkeypatch):
+        _configure_supabase(monkeypatch)
+        service = RiskService()
+        session = _FakeSession(status=503, payload={"error": "unavailable"})
+
+        result = await service.fetch_community_reports(session, _BOUNDS)
+
+        assert result == []
+        # It did attempt the request before giving up.
+        assert len(session.calls) == 1

@@ -183,7 +183,11 @@ def _reports_to_incidents(rows: Any, cutoff: datetime) -> List[Incident]:
                 severity=severity,
                 source="community",
             ))
-        except (KeyError, TypeError, ValueError):
+        except (KeyError, TypeError, ValueError, OverflowError, OSError):
+            # OverflowError/OSError: datetime.fromtimestamp on an out-of-range
+            # ts (e.g. a corrupt 1e30). One bad row must be skipped, never
+            # allowed to propagate and abort the refresh (which would discard
+            # the already-fetched NYC incidents).
             continue
 
     return incidents
@@ -409,9 +413,15 @@ class RiskService:
         key = settings.supabase_key
         if not base or not key:
             if not self._community_skip_logged:
+                missing = [
+                    name for name, val in (
+                        ("SUPABASE_URL", base),
+                        ("SUPABASE_ANON_KEY", key),
+                    ) if not val
+                ]
                 print(
-                    "[RiskService] Supabase not configured (SUPABASE_URL / "
-                    "SUPABASE_ANON_KEY unset); skipping community-report pull."
+                    f"[RiskService] Supabase not configured ({' / '.join(missing)} "
+                    "unset); skipping community-report pull."
                 )
                 self._community_skip_logged = True
             return []
@@ -422,13 +432,15 @@ class RiskService:
 
         # PostgREST: verified rows only, recent window, area bounds, minimal
         # projection. RLS policy "Reports are viewable by everyone" permits this
-        # anonymous SELECT with the anon key.
+        # anonymous SELECT with the anon key. Bounded + ordered like the NYC
+        # fetchers so a growing table can't pull an unbounded payload.
         query = (
             "verified=eq.true"
             "&select=id,type,lat,lng,ts"
             f"&ts=gte.{cutoff_ms}"
             f"&lat=gte.{south}&lat=lte.{north}"
             f"&lng=gte.{west}&lng=lte.{east}"
+            "&order=ts.desc&limit=1000"
         )
         url = f"{base.rstrip('/')}{SUPABASE_REPORTS_PATH}?{query}"
         headers = {"apikey": key, "Authorization": f"Bearer {key}"}

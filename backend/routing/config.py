@@ -42,6 +42,14 @@ class Settings:
         # low throttling pool. Sent as the X-App-Token header when present.
         self.nyc_app_token = os.getenv("NYC_OPEN_DATA_APP_TOKEN", "").strip() or None
 
+        # --- Supabase (community reports, P1-1) ---------------------------
+        # Read-only pull of verified rows from the public `reports` table via
+        # PostgREST on each risk refresh. Optional dependency: if either value
+        # is unset, the community pull is skipped gracefully (not validated
+        # below) since not every deployment has Supabase wired.
+        self.supabase_url = os.getenv("SUPABASE_URL", "").strip() or None
+        self.supabase_key = os.getenv("SUPABASE_ANON_KEY", "").strip() or None
+
         # --- Refresh cadence ----------------------------------------------
         # Minutes between scheduled risk-data refreshes (NYC Open Data + any
         # durable community sources). Config over constants: subject to

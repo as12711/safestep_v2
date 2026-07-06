@@ -177,6 +177,9 @@ async def _startup_warmup():
 app = FastAPI(
     title="SafeStep Routing API",
     description="A* weighted graph routing for safe pedestrian navigation",
+    # API contract version. This is the backend API version and is intentionally
+    # independent of the mobile app version (package.json / app.config.js): they
+    # track different things (API contract vs app release).
     version="2.0.0",
     lifespan=lifespan,
 )

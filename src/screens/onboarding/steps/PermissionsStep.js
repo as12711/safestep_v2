@@ -141,10 +141,11 @@ const PermissionsStep = memo(({
         <View style={styles.header}>
           <Text style={styles.stepLabel}>PERMISSIONS</Text>
           <Text style={styles.title}>
-            Help us keep{'\n'}you safe
+            A couple of{'\n'}permissions
           </Text>
           <Text style={styles.subtitle}>
-            SafeStep needs a few permissions to guide you safely.
+            SafeStep needs a few permissions to offer route suggestions and show
+            nearby safety resources.
           </Text>
         </View>
 
@@ -154,7 +155,7 @@ const PermissionsStep = memo(({
           <PermissionCard
             icon="📍"
             title="Location"
-            description="Find safe routes and show nearby safety resources"
+            description="Suggest safety-informed routes and show nearby safety resources"
             required={true}
             status={locationStatus}
             onRequest={requestLocationPermission}
@@ -196,7 +197,7 @@ const PermissionsStep = memo(({
             <View style={styles.warningContent}>
               <Text style={styles.warningTitle}>Location is required</Text>
               <Text style={styles.warningText}>
-                SafeStep cannot provide safe routes without knowing your location.
+                SafeStep cannot suggest safety-informed routes without knowing your location.
                 You can enable it in Settings.
               </Text>
               <TouchableOpacity onPress={openSettings}>

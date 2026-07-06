@@ -62,6 +62,19 @@ class SupabaseService {
     this.refreshPromise = null; // Prevent concurrent refreshes
     this.initialized = false;
     this.offlineQueue = [];
+    // Analytics consent gate (P1-4). Defaults to false so no analytics fire
+    // before the user has affirmatively granted consent during onboarding.
+    // SettingsContext hydrates this from the persisted consent decision.
+    this.analyticsConsent = false;
+  }
+
+  /**
+   * Set the analytics consent gate. When false, logEvent is a no-op.
+   * Called by SettingsContext (on load and on change) and by the onboarding
+   * ConsentStep the moment the user affirmatively agrees.
+   */
+  setAnalyticsConsent(granted) {
+    this.analyticsConsent = granted === true;
   }
 
   // ===========================================
@@ -425,6 +438,16 @@ class SupabaseService {
   static PROXIMITY_THRESHOLD = 15;
 
   async createPendingReport(report) {
+    // Pilot analytics: "report submitted" (consent-gated in logEvent). Fired at
+    // the single service entry point, so it covers every report UI without
+    // double-counting. NOTE: this counts submission ATTEMPTS, not created
+    // reports -- it fires before the duplicate check and the DB write, so it
+    // includes failed writes and duplicate-merges (which route to
+    // submitVerification and create no new report). Read the metric as
+    // "user submission intents." Coarse category id only -- never the
+    // description, photo, or coordinates.
+    this.logEvent('report_submitted', { type: report.type });
+
     const isAmbient = SupabaseService.AMBIENT_TYPES.includes(report.type);
     const isHighPriority = SupabaseService.HIGH_PRIORITY_TYPES.includes(report.type);
 
@@ -630,6 +653,14 @@ class SupabaseService {
 
   async logEvent(eventType, eventData = {}) {
     if (!ENV.ENABLE_ANALYTICS) return { data: null, error: null };
+    // P1-4 consent gate: never fire analytics before the user has granted
+    // consent. ConsentStep flips this on right before it logs consent_granted.
+    // NOTE: this gate is intentionally closed (false) on every fresh launch
+    // until SettingsContext hydrates the persisted consent decision from
+    // AsyncStorage and calls setAnalyticsConsent. For an already-consented
+    // returning user there is a brief window at startup where events are
+    // dropped; that is expected, not a "missing first event" bug to chase.
+    if (!this.analyticsConsent) return { data: null, error: null };
 
     return this.request('/rest/v1/analytics', {
       method: 'POST',

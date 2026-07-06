@@ -128,8 +128,8 @@ const WelcomeStep = memo(({ isActive, onNext, onSkip }) => {
         {/* Description */}
         <View style={styles.descriptionContainer}>
           <Text style={styles.description}>
-            SafeStep helps you navigate safely through your city with real-time
-            safety data from your community and official sources.
+            SafeStep helps you navigate your city with real-time safety
+            information from your community and official sources.
           </Text>
         </View>
 

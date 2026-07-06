@@ -116,6 +116,48 @@ class TestNycToken:
 
 
 # =========================================
+# Supabase (P1-1 community-report pull) -- optional, not required by validate()
+# =========================================
+
+class TestSupabaseSettings:
+    def test_url_and_key_default_to_none(self, monkeypatch):
+        monkeypatch.delenv("SUPABASE_URL", raising=False)
+        monkeypatch.delenv("SUPABASE_ANON_KEY", raising=False)
+        s = Settings()
+        assert s.supabase_url is None
+        assert s.supabase_key is None
+
+    def test_parse_from_env(self, monkeypatch):
+        monkeypatch.setenv("SUPABASE_URL", "https://proj.supabase.co")
+        monkeypatch.setenv("SUPABASE_ANON_KEY", "anon-key-123")
+        s = Settings()
+        assert s.supabase_url == "https://proj.supabase.co"
+        assert s.supabase_key == "anon-key-123"
+
+    def test_whitespace_only_is_none(self, monkeypatch):
+        monkeypatch.setenv("SUPABASE_URL", "   ")
+        monkeypatch.setenv("SUPABASE_ANON_KEY", "  ")
+        s = Settings()
+        assert s.supabase_url is None
+        assert s.supabase_key is None
+
+    def test_values_trimmed(self, monkeypatch):
+        monkeypatch.setenv("SUPABASE_URL", "  https://proj.supabase.co  ")
+        monkeypatch.setenv("SUPABASE_ANON_KEY", "  anon-key-123  ")
+        s = Settings()
+        assert s.supabase_url == "https://proj.supabase.co"
+        assert s.supabase_key == "anon-key-123"
+
+    def test_not_required_by_validate(self, monkeypatch, tmp_path, fake_graph_manager):
+        # Supabase is an optional dependency: validate() must pass with it unset.
+        monkeypatch.delenv("SUPABASE_URL", raising=False)
+        monkeypatch.delenv("SUPABASE_ANON_KEY", raising=False)
+        monkeypatch.setenv("SAFESTEP_CACHE_DIR", str(tmp_path))
+        monkeypatch.setenv("SAFESTEP_AREA", "nyu")
+        Settings().validate()  # should not raise
+
+
+# =========================================
 # validate() -- with a fake graph_manager so no osmnx import is needed
 # =========================================
 

@@ -448,7 +448,7 @@ export const LAYOUT = {
 // SAFETY MESSAGING
 // ===========================================
 export const SAFETY_MESSAGES = {
-  reportFooter: "Your reports help inform our safe route building algorithm",
+  reportFooter: "Your reports help inform our safety-informed routing algorithm",
   homeBeaconSetup: "Set up Home Beacon to automatically notify your emergency contacts when you arrive home safely. No more 'did you make it home?' texts!",
   homeBeaconReady: "Your emergency contacts will be notified when you arrive at your saved home location.",
   photoUploadNotice: "Uploading a photo with your report helps verify information more quickly",
